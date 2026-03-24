@@ -1,226 +1,51 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciamento de Visitas</title>
+    <title>Sistema de Fila</title>
+    <!-- Essa linha conecta o HTML com o seu CSS na pasta static -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
 
-    <!-- Cabeçalho -->
-    <header class="main-header">
-        <h1>Calendário de Visitas</h1>
-        <div class="header-actions">
-            <!-- Pesquisar usuário -->
-            <form method="GET" action="{{ url_for('visitas.index') }}" id="form-busca" style="display:inline-flex;gap:8px;">
-                <input
-                    type="text"
-                    name="cpf_paciente"
-                    id="input-cpf"
-                    placeholder="CPF do paciente..."
-                    value="{{ cpf_paciente }}"
-                    class="input-busca"
-                    autocomplete="off"
-                />
-                <button type="submit" class="btn-search">Pesquisar 🔍</button>
+    <div class="container">
+        <h1>💉 Fila de Espera</h1>
+        
+        <form action="/adicionar" method="POST">
+            <input type="text" name="nome" placeholder="Nome do paciente" required>
+            <button type="submit">Entrar na Fila</button>
+        </form>
 
-                <!-- Filtros inline -->
-                <input type="date" name="data" value="{{ filtro_data }}" class="input-filtro" title="Filtrar por data">
-                <input type="time" name="hora" value="{{ filtro_hora }}" class="input-filtro" title="Filtrar por hora" step="1800">
-                <button type="submit" class="btn-search">Filtrar ⏳</button>
-            </form>
-
-            <a href="{{ url_for('auth.logout') }}" class="btn-search" style="margin-left:12px;">Sair 🚪</a>
-        </div>
-    </header>
-
-    <!-- Barra do paciente -->
-    <div class="patient-bar">
-        {% if paciente %}
-            CPF: {{ paciente.cpf }} — {{ paciente.nome }}
-        {% else %}
-            Nenhum paciente selecionado. Use a busca acima.
-        {% endif %}
-    </div>
-
-    <!-- Flashs de feedback -->
-    {% with msgs = get_flashed_messages(with_categories=True) %}
-        {% if msgs %}
-            <div class="flash-container">
-            {% for cat, msg in msgs %}
-                <div class="flash flash-{{ cat }}">{{ msg }}</div>
-            {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-
-    <main class="container">
-
-        <!-- Calendário -->
-        <section class="card">
-            <div class="card-top-row">
-                <h2 class="card-title">Filtrar agenda:</h2>
-                <div class="legend">
-                    <span><button class="dot green-static"></button> Horário disponível</span>
-                    <br>
-                    <span><button class="dot red-static"></button> Horário indisponível</span>
-                </div>
-            </div>
-
-            <div class="filter-pills">
-                <button class="pill-outline" onclick="navegarSemana(-1)">&#8592; Semana anterior</button>
-                <span id="periodo-semana" style="font-weight:600;padding:0 12px;"></span>
-                <button class="pill-outline" onclick="navegarSemana(1)">Próxima semana &#8594;</button>
-            </div>
-
-            <div class="calendar-grid" id="calendar-grid">
-                <!-- Cabeçalhos dos dias -->
-                <div class="day-header"><span>SEG</span></div>
-                <div class="day-header"><span>TER</span></div>
-                <div class="day-header"><span>QUA</span></div>
-                <div class="day-header"><span>QUI</span></div>
-                <div class="day-header"><span>SEX</span></div>
-                <div class="day-header"><span>SAB</span></div>
-                <div class="day-header"><span>DOM</span></div>
-                <!-- Slots carregados via JS -->
-            </div>
-        </section>
-
-        <!-- Solicitações -->
-        <section class="card">
-            <h2 class="card-title">Solicitações:</h2>
-
-            {% if solicitacoes %}
-                {% for v in solicitacoes %}
-                <div class="request-table">
-                    <div class="table-head">
-                        <div>Visitante:</div>
-                        <div>Paciente:</div>
-                        <div class="days">Data/Hora:</div>
-                    </div>
-                    <div class="table-content">
-                        <!-- Visitante -->
-                        <div class="col-data">
-                            <p>Nome: {{ v.visitante.nome }}</p>
-                            <p>CPF: {{ v.visitante.cpf }}</p>
-                            <p>Email: {{ v.visitante.email or '—' }}</p>
-                            <p>Contato: {{ v.visitante.contato or '—' }}</p>
-                        </div>
-                        <!-- Paciente -->
-                        <div class="col-data">
-                            <p>Nome: {{ v.paciente.nome }}</p>
-                            <p>CPF: {{ v.paciente.cpf }}</p>
-                            <p>Email: {{ v.paciente.email or '—' }}</p>
-                            <p>Contato: {{ v.paciente.contato or '—' }}</p>
-                        </div>
-                        <!-- Data/Hora -->
-                        <div class="col-datetime">
-                            <p class="day"><strong>{{ v.data_hora }}</strong></p>
-                        </div>
-                        <!-- Ações -->
-                        <div class="col-actions">
-                            <!-- Aceitar -->
-                            <form method="POST" action="{{ url_for('visitas.aceitar', visita_id=v.id) }}" style="display:inline;">
-                                <button type="submit" class="btn-white shadow">Aceitar</button>
-                            </form>
-
-                            <!-- Recusar -->
-                            <form method="POST" action="{{ url_for('visitas.recusar', visita_id=v.id) }}" style="display:inline;">
-                                <input type="hidden" name="motivo" value="">
-                                <button type="submit" class="btn-white shadow">Recusar</button>
-                            </form>
-
-                            <!-- Restringir -->
-                            <form method="POST" action="{{ url_for('visitas.restringir', visita_id=v.id) }}"
-                                  style="display:inline;"
-                                  onsubmit="return confirm('Restringir {{ v.visitante.nome }} para este paciente?');">
-                                <button type="submit" class="btn-white border-red text-red">Restringir</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Status</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in lista %}
+                <tr>
+                    <td>{{ p.nome }}</td>
+                    <td><span class="status-badge">{{ p.status }}</span></td>
+                    <td>
+                        {% if p.status == 'Aguardando' %}
+                            <a href="/atender/{{ loop.index0 }}"><button style="background: #2196F3;">Atender</button></a>
+                        {% elif p.status == 'Em Atendimento' %}
+                            <a href="/finalizar/{{ loop.index0 }}"><button style="background: #f44336;">Finalizar</button></a>
+                        {% else %}
+                            ✅
+                        {% endif %}
+                    </td>
+                </tr>
                 {% endfor %}
-            {% else %}
-                <p style="padding:16px;color:#666;">
-                    {% if paciente %}
-                        Nenhuma solicitação pendente para {{ paciente.nome }}.
-                    {% else %}
-                        Selecione um paciente para ver as solicitações.
-                    {% endif %}
-                </p>
-            {% endif %}
-        </section>
+            </tbody>
+        </table>
 
-        <button class="btn-back" onclick="history.back()">Voltar</button>
-
-    </main>
-
-    <footer class="footer-sis">
-        <div class="footer-content">
-            <div class="footer-section">
-                <p>&copy; 2026 SIS - Sistema Integrado de Saúde. Todos os direitos reservados.</p>
-            </div>
-            <div class="footer-section">
-                <img width="24" height="24" src="https://img.icons8.com/material-outlined/24/whatsapp--v1.png" alt="whatsapp"/>
-                <span>+55 82 9120-9854</span>
-            </div>
-            <div class="footer-section">
-                <img width="24" height="24" src="https://img.icons8.com/material-outlined/24/instagram-new--v1.png" alt="instagram"/>
-                <span>@Sistema_Integrado_de_Saude</span>
-            </div>
-        </div>
-    </footer>
-
-    <script>
-        // ── Calendário dinâmico ──────────────────────────────────────────────
-        let semanaOffset = 0;
-        const pacienteId = {{ paciente.id if paciente else 'null' }};
-
-        function carregarCalendario() {
-            const url = `/agenda/semana?offset=${semanaOffset}` +
-                        (pacienteId ? `&paciente_id=${pacienteId}` : '');
-
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('periodo-semana').textContent = data.periodo;
-                    renderizarSlots(data.slots);
-                });
-        }
-
-        function renderizarSlots(slots) {
-            const grid = document.getElementById('calendar-grid');
-
-            // Remove slots antigos (mantém os 7 cabeçalhos)
-            const cabecalhos = Array.from(grid.querySelectorAll('.day-header'));
-            grid.innerHTML = '';
-            cabecalhos.forEach(c => grid.appendChild(c));
-
-            // Agrupa por hora para renderizar linha por linha
-            const horas = [...new Set(slots.map(s => s.hora))];
-            horas.forEach(hora => {
-                const doDia = slots.filter(s => s.hora === hora);
-                doDia.forEach(slot => {
-                    const div = document.createElement('div');
-                    div.className = 'slot';
-                    const cor = slot.disponivel ? 'green' : 'red';
-                    div.innerHTML = `<button class="dot-btn ${cor}"></button> ${hora}`;
-                    grid.appendChild(div);
-                });
-            });
-        }
-
-        function navegarSemana(dir) {
-            semanaOffset += dir;
-            carregarCalendario();
-        }
-
-        // Carrega ao abrir a página
-        carregarCalendario();
-    </script>
+        <br>
+        <a href="/limpar" style="color: #666; font-size: 0.8em;">Limpar tudo</a>
+    </div>
 
 </body>
 </html>
